@@ -407,27 +407,27 @@ void strassenMultiplication(CONST WTF *matrix_A, CONST WTF *matrix_B, uint32 siz
 
 
 //[n*(i) + (j)]
-#define TEST_SIZE 8U
+#define TEST_SIZE 16U
 uint32 size = TEST_SIZE;
-BBQ MA[TEST_SIZE*TEST_SIZE] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63};
-BBQ MB[TEST_SIZE*TEST_SIZE] = {1,1,1,1,1,1,1,1, \
-		                          1,1,1,1,1,1,1,1, \
-		                          1,1,1,1,1,1,1,1, \
-		                          1,1,1,1,1,1,1,1, \
-		                          1,1,1,1,1,1,1,1, \
-		                          1,1,1,1,1,1,1,1, \
-		                          1,1,1,1,1,1,1,1, \
-		                          1,1,1,1,1,1,1,1};
-
-BBQ MU[TEST_SIZE*TEST_SIZE] = {1,0,0,0,0,0,0,0, \
-						   	      0,1,0,0,0,0,0,0, \
-							      0,0,1,0,0,0,0,0, \
-							      0,0,0,1,0,0,0,0, \
-							      0,0,0,0,1,0,0,0, \
-							      0,0,0,0,0,1,0,0, \
-							      0,0,0,0,0,0,1,0, \
-							      0,0,0,0,0,0,0,1};
-BBQ MC[TEST_SIZE*TEST_SIZE];
+//BBQ MA[TEST_SIZE*TEST_SIZE] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63};
+//BBQ MB[TEST_SIZE*TEST_SIZE] = {1,1,1,1,1,1,1,1, \
+//		                          1,1,1,1,1,1,1,1, \
+//		                          1,1,1,1,1,1,1,1, \
+//		                          1,1,1,1,1,1,1,1, \
+//		                          1,1,1,1,1,1,1,1, \
+//		                          1,1,1,1,1,1,1,1, \
+//		                          1,1,1,1,1,1,1,1, \
+//		                          1,1,1,1,1,1,1,1};
+//
+//BBQ MU[TEST_SIZE*TEST_SIZE] = {1,0,0,0,0,0,0,0, \
+//						   	      0,1,0,0,0,0,0,0, \
+//							      0,0,1,0,0,0,0,0, \
+//							      0,0,0,1,0,0,0,0, \
+//							      0,0,0,0,1,0,0,0, \
+//							      0,0,0,0,0,1,0,0, \
+//							      0,0,0,0,0,0,1,0, \
+//							      0,0,0,0,0,0,0,1};
+//BBQ MC[TEST_SIZE*TEST_SIZE];
 
 uint32 main(uint32 argc, char *argv[])
 {	
@@ -456,10 +456,25 @@ uint32 main(uint32 argc, char *argv[])
    WTF *matrix_resultA, *matrix_resultB;
 
    matrix_A->size = TEST_SIZE;
-   matrix_A->elem = MA;
+   //matrix_A->elem = MA;
+   for (uint32 i = 0; i < TEST_SIZE; ++i)
+   {
+	   for (uint32 j = 0; j < TEST_SIZE; ++j)
+	   {
+		   //matrix_A->elem[i*matrix_A->size + j] = i*matrix_A->size + j;   // boring content
+		   if (i==j) matrix_A->elem[i*matrix_A->size + j] = 1;          // unit matrix
+	   }
+   }
 
    matrix_B->size = TEST_SIZE;
-   matrix_B->elem = MU;
+   //matrix_B->elem = MU;
+   for (uint32 i = 0; i < TEST_SIZE; ++i)
+   {
+	   for (uint32 j = 0; j < TEST_SIZE; ++j)
+	   {
+		   if (i==j) matrix_B->elem[i*matrix_B->size + j] = 1;          // unit matrix
+	   }
+   }
 
     // Read Matrices A and B from input
     // if (readInput(matrix_A, matrix_B, size, size, size) != 1)  // If return is not 1, something is wrong
