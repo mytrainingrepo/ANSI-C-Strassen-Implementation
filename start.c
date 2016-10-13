@@ -76,9 +76,34 @@ size_t calculate_heap_usage(sint32 lvl, sint32 max)
 			power7 *=7;
 		}
 
-		heap_req += 10 * power7 * (sizeof(WTF) + sizeof(BBQ) * (1<<(max-i)));
+		heap_req += 10 * power7 * \
+					(sizeof(WTF) + \
+							sizeof(BBQ) * \
+							((1<<(max-i-1)) * (1<<(max-i-1)))  );
+		printf("\n (%lu) instances * (%lu)[%lu + %lu * %lu * %lu] =  %lu\n", \
+				10 * power7, \
+				(sizeof(WTF) + sizeof(BBQ) * (1<<(max-i-1)) * (1<<(max-i-1))), \
+				sizeof(WTF), \
+				sizeof(BBQ), \
+				(1<<(max-i-1)), \
+				(1<<(max-i-1)), \
+				(10 * power7 * (sizeof(WTF) + sizeof(BBQ) * (1<<(max-i-1)) * (1<<(max-i-1)))) );
 	}
 
+	printf("\n heap req = %lu \n", heap_req);
+	printf("\n + %lu \n", 2* (sizeof(WTF)+ sizeof(BBQ) * ((1<<(max-1)) * (1<<(max-1))) ));
+	heap_req += 2 * \
+			(sizeof(WTF) + \
+					sizeof(BBQ) * \
+					((1<<(max-1)) * (1<<(max-1)))  );
+
+	printf("\n + %lu \n", 3* (sizeof(WTF)+ sizeof(BBQ) * ((1<<(max)) * (1<<(max))) ));
+	heap_req += 3 * \
+			(sizeof(WTF) + \
+					sizeof(BBQ) * \
+					((1<<(max)) * (1<<(max)))  );
+
+	printf("\n heap req = %lu \n", heap_req);
 	return heap_req;
 }
 
@@ -449,7 +474,7 @@ sint32 main(sint32 argc, char *argv[])
 
 	unsigned long mem_req;
 	mem_req = calculate_heap_usage(recursion_lvl, high2power);
-	printf ("\n Glorious heap usage = %lu \n", mem_req + 3*1040 + 2*272);
+	printf ("\n Glorious heap usage = %lu \n", mem_req);
 
     sint32 m, k, n, cacheBlockSize, dataType;
 
