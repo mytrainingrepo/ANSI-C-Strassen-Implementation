@@ -1,3 +1,10 @@
+
+
+/*********************************************************************************
+ * Includes
+ *********************************************************************************/
+#include "Compiler_Cfg.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -5,6 +12,7 @@
 #include <string.h>
 #include <sys/resource.h>
 #include <sys/time.h>
+
 
 typedef int sint32;
 typedef sint32 BBQ;
@@ -15,10 +23,15 @@ typedef struct matrix
 	BBQ *elem;
 } matrix_t;
 
-
+// __attribute__((always_inline))
 #define WTF matrix_t
 #define CONST
 #define min(a,b) ((a<b) ? a : b)
+
+/*********************************************************************************
+ * Global variables
+ *********************************************************************************/
+
 
 CONST sint32 g_maxThreads = 7; 	   // Maximum number of threads this program do use ( dont need more ).
 CONST sint32 g_truncateSize = 32;    // Size of a matrix side when it is small enough to run on standard multiplication.
@@ -29,10 +42,75 @@ sint32 g_cacheBlockSize = 16;   	   // Block size for loop tilling/blocking.
 void *MemoryCurrent;
 void *MemoryStart;
 
-void print_mat(WTF *x);
-void print_2mats(WTF *x, WTF *y);
+/*********************************************************************************
+ * Function declarations
+ *********************************************************************************/
 
-int nextHighest2Power(int number)
+
+LOCAL_INLINE void PrintMatrix(WTF *A);
+LOCAL_INLINE void GetElapsedTime(double* timing, struct timeval* time_start, struct timeval* time_end);
+LOCAL_INLINE void StartTiming(struct rusage* usage, struct timeval* user_start, struct timeval* system_start);
+LOCAL_INLINE void StopTiming(struct rusage* usage, struct timeval* user_end, struct timeval* system_end);
+LOCAL_INLINE void ComputeTotalTime(double* timing, struct timeval* time_start1, struct timeval* time_end1,
+										   struct timeval* time_start2, struct timeval* time_end2);
+LOCAL_INLINE int FindNextPowerOf2(int number);
+LOCAL_INLINE int FindPrevPowerOf2(int number);
+LOCAL_INLINE size_t CalculateHeapSize(sint32 lvl, sint32 max);
+LOCAL_INLINE void CopyMatrix(CONST WTF *src_mat, sint32 ini_i0, sint32 ini_j0, sint32 ini_i1, sint32 ini_j1, sint32 size, WTF *dest_mat);
+LOCAL_INLINE void SubMatrix(CONST WTF *a_mat, CONST WTF *b_mat, sint32 ini_i0, sint32 ini_j0, sint32 ini_i1, sint32 ini_j1, \
+               sint32 ini_i2, sint32 ini_j2, sint32 size,  WTF *res_mat);
+LOCAL_INLINE void AddMatrix(CONST WTF *a_mat, CONST WTF *b_mat, sint32 ini_i0, sint32 ini_j0, sint32 ini_i1, sint32 ini_j1, \
+               sint32 ini_i2, sint32 ini_j2, sint32 size,  WTF *res_mat);
+LOCAL_INLINE void MultiplyMatrixNaive(WTF *A, WTF *B, WTF *C);
+LOCAL_INLINE void MultiplyMatrixOptimized(CONST WTF *A, CONST WTF *B, WTF *C, sint32 size);
+LOCAL_INLINE void MultiplyMatrixTiny(CONST WTF *matrix_A, CONST WTF *matrix_B, WTF *matrix_C, sint32 size);
+LOCAL_INLINE void AllocateAll (size_t size);
+LOCAL_INLINE void FreeAll (void);
+LOCAL_INLINE WTF *GetSquareMatrix(sint32 n);
+LOCAL_INLINE void ZeroMatrix (WTF *A);
+
+void strassenMultiplication(CONST WTF *matrix_A, CONST WTF *matrix_B, sint32 size,
+                            WTF *matrix_C, WTF *matrix_resultA, WTF *matrix_resultB);
+
+/*********************************************************************************
+ * Function definitions
+ *********************************************************************************/
+
+LOCAL_INLINE void GetElapsedTime(double* timing, struct timeval* time_start, struct timeval* time_end)
+{
+	*timing = 0;
+
+	*timing = (double)(time_end->tv_sec- time_start->tv_sec)*1000;
+	*timing += (double)(time_end->tv_usec - time_start->tv_usec)/1000;
+
+	return;
+}
+
+LOCAL_INLINE void StartTiming(struct rusage* usage, struct timeval* user_start, struct timeval* system_start)
+{
+	getrusage(RUSAGE_SELF, usage);
+    *user_start = usage->ru_utime;
+    *system_start = usage->ru_stime;
+}
+
+LOCAL_INLINE void StopTiming(struct rusage* usage, struct timeval* user_end, struct timeval* system_end)
+{
+	getrusage(RUSAGE_SELF, usage);
+    *user_end = usage->ru_utime;
+    *system_end = usage->ru_stime;
+}
+
+LOCAL_INLINE void ComputeTotalTime(double* timing, struct timeval* time_start1, struct timeval* time_end1,
+										   struct timeval* time_start2, struct timeval* time_end2)
+{
+	double aux;
+	GetElapsedTime(&aux, time_start1, time_end1);//printf("\n\n     Time spent in user mode   = %f \n", aux);
+	GetElapsedTime(timing, time_start2, time_end2);//printf("\n     Time spent in kernel mode = %f \n", *timing);
+	*timing += aux;
+	//printf("\n          Total time spent     = %f \n", *timing);
+}
+
+LOCAL_INLINE int FindNextPowerOf2(int number)
 {
 	int count=0;
 	int comp = number;
@@ -52,7 +130,7 @@ int nextHighest2Power(int number)
 	}
 }
 
-int prevHighest2Power(int number)
+LOCAL_INLINE int FindPrevPowerOf2(int number)
 {
 	int count=0;
 	int comp = number;
@@ -65,7 +143,7 @@ int prevHighest2Power(int number)
 	return (count-1);
 }
 
-size_t calculate_heap_usage(sint32 lvl, sint32 max)
+LOCAL_INLINE size_t CalculateHeapSize(sint32 lvl, sint32 max)
 {
 	size_t heap_req = 0;
 	int power7 = 0;
@@ -98,7 +176,7 @@ size_t calculate_heap_usage(sint32 lvl, sint32 max)
 	return heap_req;
 }
 
-void CopyMatrix(CONST WTF *src_mat, sint32 ini_i0, sint32 ini_j0, sint32 ini_i1, sint32 ini_j1, sint32 size, WTF *dest_mat)
+LOCAL_INLINE void CopyMatrix(CONST WTF *src_mat, sint32 ini_i0, sint32 ini_j0, sint32 ini_i1, sint32 ini_j1, sint32 size, WTF *dest_mat)
 {
 	sint32 size_src = src_mat->size;
 	sint32 size_dest = dest_mat->size;
@@ -115,42 +193,21 @@ void CopyMatrix(CONST WTF *src_mat, sint32 ini_i0, sint32 ini_j0, sint32 ini_i1,
 }
 
 
-void print_mat(WTF *x)
+LOCAL_INLINE void PrintMatrix(WTF *A)
 {
    sint32 i,j;
    printf("\n");
-   for (i=0;i < x->size;i++)
+   for (i=0;i < A->size;i++)
    {
-      for (j=0;j  < x->size;j++)
+      for (j=0;j  < A->size;j++)
       {
-         printf(" %3d",x->elem[(x->size)*(i) + (j)]);
+         printf(" %3d",A->elem[(A->size)*(i) + (j)]);
       }
       printf("\n");
    }
 }
 
-void print_2mats(WTF *x, WTF *y)
-{
-	   sint32 i,j;
-	   printf("\n");
-	   for (i=0;i < x->size;i++)
-	   {
-	      for (j=0;j  < x->size;j++)
-	      {
-	         printf(" %3d",x->elem[(x->size)*(i) + (j)]);
-	      }
-
-	      printf("          ");
-
-	      for (j=0;j  < y->size;j++)
-	      {
-	         printf(" %3d",y->elem[(y->size)*(i) + (j)]);
-	      }
-	      printf("\n");
-	   }
-}
-
-void SubMatrix(CONST WTF *a_mat, CONST WTF *b_mat, sint32 ini_i0, sint32 ini_j0, sint32 ini_i1, sint32 ini_j1, \
+LOCAL_INLINE void SubMatrix(CONST WTF *a_mat, CONST WTF *b_mat, sint32 ini_i0, sint32 ini_j0, sint32 ini_i1, sint32 ini_j1, \
                sint32 ini_i2, sint32 ini_j2, sint32 size,  WTF *res_mat)
 {
 	sint32 size_a = a_mat->size;
@@ -167,7 +224,7 @@ void SubMatrix(CONST WTF *a_mat, CONST WTF *b_mat, sint32 ini_i0, sint32 ini_j0,
 }
 
 
-void AddMatrix(CONST WTF *a_mat, CONST WTF *b_mat, sint32 ini_i0, sint32 ini_j0, sint32 ini_i1, sint32 ini_j1, \
+LOCAL_INLINE void AddMatrix(CONST WTF *a_mat, CONST WTF *b_mat, sint32 ini_i0, sint32 ini_j0, sint32 ini_i1, sint32 ini_j1, \
                sint32 ini_i2, sint32 ini_j2, sint32 size,  WTF *res_mat)
 {
 	sint32 size_a = a_mat->size;
@@ -185,18 +242,33 @@ void AddMatrix(CONST WTF *a_mat, CONST WTF *b_mat, sint32 ini_i0, sint32 ini_j0,
 }	
 
 
-
+LOCAL_INLINE void MultiplyMatrixNaive(WTF *A, WTF *B, WTF *C)
+{
+	int i, j, k;// i*(A->size) + j
+	int size_A = A->size, size_B = B->size, size_C = C->size;
+	for (i = 0; i < size_A; i++)
+	{
+		for (j = 0; j < size_B; j++)
+		{
+	    	for (k = 0; k < size_A; k++)
+	    	{
+	        	C->elem[i*size_C + j] += A->elem[i+size_A + k]* B->elem[k*size_B + j];
+	      	}
+	  	}
+   	}
+   	return;
+}
 
 
 // Calculates matrix multiplication between matrix_A and matrix_B. Store the result in matrix_C.
 // ini_i means starting index i and ini_j means starting index j.
 // Looping through lines ini_i <= i <= ini_i+size and columns ini_j <= j <= ini_j+size from A and B
 // Loop unroll and loop blocking applied for performance purposes
-void MultiplyMatrix(CONST WTF *A, CONST WTF *B, WTF *C, sint32 size)
+LOCAL_INLINE void MultiplyMatrixOptimized(CONST WTF *A, CONST WTF *B, WTF *C, sint32 size)
 {
 	sint32 x = 0;
    sint32 ini_i = 0, ini_j = 0;
-	sint32 i, j, k, l;
+	sint32 i, j, k;
 	sint32 limit0 = size + ini_i; // Index i limit
 	sint32 limit1 = size + ini_j; // Index j limit
 	sint32 limit2 = size;         // Index k limit
@@ -266,64 +338,60 @@ void MultiplyMatrix(CONST WTF *A, CONST WTF *B, WTF *C, sint32 size)
 
 
 
-// Corner case when n = 0 or n = 1
-void handleCornerCase(CONST WTF *matrix_A, CONST WTF *matrix_B, WTF *matrix_C, sint32 size)
+// n = 0 or n = 1
+LOCAL_INLINE void MultiplyMatrixTiny(CONST WTF *matrix_A, CONST WTF *matrix_B, WTF *matrix_C, sint32 size)
 {
-	if ( size == 1 ) {
-	   matrix_C->elem[0] = matrix_A->elem[0] * matrix_B->elem[0];
-	} else if ( size == 2 )
+	if ( size == 1 )
 	{
-	   // This size would crash multi core forced solution ???
-	   MultiplyMatrix(matrix_A, matrix_B, matrix_C, size);
+	   matrix_C->elem[0] = matrix_A->elem[0] * matrix_B->elem[0];
+	}
+	else if ( size == 2 )
+	{
+	   MultiplyMatrixOptimized(matrix_A, matrix_B, matrix_C, size);
 	}
 }
 
-void MassiveAlloc (size_t size)
+LOCAL_INLINE void AllocateAll (size_t size)
 {
 	MemoryStart = (void *) malloc(size);
 	MemoryCurrent = MemoryStart;
+	memset(MemoryStart, 0, size); //??
 	return;
 }
 
-void MassiveFree (void)
+LOCAL_INLINE void FreeAll (void)
 {
 	free(MemoryStart);
 }
 
-WTF *GetSquareMatrix(sint32 n)
+LOCAL_INLINE WTF *GetSquareMatrix(sint32 n)
 {
    WTF *ret;
    sint32 i;
    
+   // individual allocation
    //ret = (WTF *) malloc(n*n*sizeof(BBQ) + sizeof(WTF));
+
    ret = (WTF *) MemoryCurrent;
    MemoryCurrent += n*n*sizeof(BBQ) + sizeof(WTF);
    
    ret->size = n;
    ret->elem = (BBQ*) (ret + 1);
-   memset(ret->elem, 0, n*n*sizeof(BBQ));
 
    return ret;
 }
 
-void clear (WTF *X)
+LOCAL_INLINE void ZeroMatrix (WTF *A)
 {
-   sint32 i,j;
-   sint32 size = X->size;
-   for (i = 0; i < size; i++)
-   {
-      for (j = 0; j < size; j++)
-      {
-         X->elem[size*(i) + (j)] = 0;
-      }
-   }
+   sint32 size = A->size;
+   memset(A->elem,0,size*size*sizeof(*(A->elem)));
 }
 
 // Calculates Strassen multiplication within the range: lines ini_i <= i <= ini_i+size and columns ini_j <= j <= ini_j+size
 void strassenMultiplication(CONST WTF *matrix_A, CONST WTF *matrix_B, sint32 size,
                             WTF *matrix_C, WTF *matrix_resultA, WTF *matrix_resultB) {
     if (size <= g_truncateSize){ // Small enough to run standard multiplication
-    	MultiplyMatrix(matrix_A, matrix_B, matrix_C, size);
+    	MultiplyMatrixOptimized(matrix_A, matrix_B, matrix_C, size);
     } else {
         sint32 half_size = size/2;		   // Size for each four quadrant
         sint32 mid_i = half_size; // Index middle of side1
@@ -349,13 +417,9 @@ void strassenMultiplication(CONST WTF *matrix_A, CONST WTF *matrix_B, sint32 siz
 		// Two auxiliar matrices are needed to hold M4 and M5 values
         WTF *matrix_M1 = GetSquareMatrix(half_size);
         WTF *matrix_M2 = GetSquareMatrix(half_size);
-        clear(matrix_M1);
-        clear(matrix_M2);
+        ZeroMatrix(matrix_M1);
+        ZeroMatrix(matrix_M2);
         
-//        static unsigned int cnt = 0;
-//        cnt++;
-//        printf("\n %5d .    10 x (overhead [%2lu] + data(%3d^2)[%4lu] )%4lu", cnt, sizeof(WTF),half_size, half_size*half_size*sizeof(BBQ), half_size*half_size*sizeof(BBQ) + sizeof(WTF));
-
         // Getting submatrices from A and B
         for (sint32 i = 0; i < half_size; ++i)
         {
@@ -381,7 +445,7 @@ void strassenMultiplication(CONST WTF *matrix_A, CONST WTF *matrix_B, sint32 siz
         
         // Copying directly to matrix_C (answer matrix)
         CopyMatrix(matrix_M1, 0, 0, 0, 0, half_size, matrix_C);
-        clear(matrix_M1);
+        ZeroMatrix(matrix_M1);
         
         // Calculating M2 = (A21 + A22) * (B11)
         AddMatrix(submatrix_A21, submatrix_A22, 0, 0, 0, 0, 0, 0, half_size, matrix_resultA);
@@ -389,7 +453,7 @@ void strassenMultiplication(CONST WTF *matrix_A, CONST WTF *matrix_B, sint32 siz
         strassenMultiplication(matrix_resultA, matrix_resultB, half_size, matrix_M1, matrix_resultA, matrix_resultB);
         
         CopyMatrix(matrix_M1, 0, 0, mid_i, 0, half_size, matrix_C);
-        clear(matrix_M1);
+        ZeroMatrix(matrix_M1);
         
         // Calculating M3 = (A11) * (B12 - B22)
         CopyMatrix(submatrix_A11, 0, 0, 0, 0, half_size, matrix_resultA);
@@ -397,7 +461,7 @@ void strassenMultiplication(CONST WTF *matrix_A, CONST WTF *matrix_B, sint32 siz
         strassenMultiplication(matrix_resultA, matrix_resultB, half_size, matrix_M1, matrix_resultA, matrix_resultB);
         
         CopyMatrix(matrix_M1, 0, 0, 0, mid_j, half_size, matrix_C);
-        clear(matrix_M1);
+        ZeroMatrix(matrix_M1);
         
         // Calculating M6 = (A21 - A11) * (B11 + B12)
         SubMatrix(submatrix_A21, submatrix_A11, 0, 0, 0, 0, 0, 0, half_size, matrix_resultA);
@@ -405,7 +469,7 @@ void strassenMultiplication(CONST WTF *matrix_A, CONST WTF *matrix_B, sint32 siz
         strassenMultiplication(matrix_resultA, matrix_resultB, half_size, matrix_M1, matrix_resultA, matrix_resultB);
         
         CopyMatrix(matrix_M1, 0, 0, mid_i, mid_j, half_size, matrix_C);
-        clear(matrix_M1);
+        ZeroMatrix(matrix_M1);
         
         // Calculate C22 = M1 - M2 + M3 + M6
         AddMatrix(matrix_C, matrix_C, mid_i, mid_j, 0, 0, mid_i, mid_j, half_size, matrix_C);     // C22 = M1 + M6
@@ -436,7 +500,7 @@ void strassenMultiplication(CONST WTF *matrix_A, CONST WTF *matrix_B, sint32 siz
         // Calculating partially C11 = M1 + M4 - M5
         AddMatrix(matrix_C, matrix_M1, 0, 0, 0, 0, 0, 0, half_size, matrix_C);
         
-        clear(matrix_M1);
+        ZeroMatrix(matrix_M1);
         
         // Calculating M7 = (A12 - A22) * (B21 + B22)
         SubMatrix(submatrix_A12, submatrix_A22, 0, 0, 0, 0, 0, 0, half_size, matrix_resultA);
@@ -453,6 +517,11 @@ void strassenMultiplication(CONST WTF *matrix_A, CONST WTF *matrix_B, sint32 siz
 
 sint32 main(sint32 argc, char *argv[])
 {	
+    double read_time, process_time, write_time;
+	struct timeval system_start, system_end, user_start, user_end; // Structs used by rusage
+	struct rusage usage;
+	struct timeval time_start, time_end; // Structs gettimeofday
+
 	sint32 array_size = 8;
 	sint32 direct_comp_size = 4;
 
@@ -461,19 +530,18 @@ sint32 main(sint32 argc, char *argv[])
 	if (argc > 1) array_size = atoi(argv[1]);
 	if (argc > 2) g_truncateSize = atoi(argv[2]);
 
-	high2power = nextHighest2Power(array_size);
-	low2power  = prevHighest2Power(g_truncateSize);
-	recursion_lvl = high2power - low2power;printf("\n this cfg will recurse %d times", recursion_lvl);
+	StartTiming(&usage, &user_start, &system_start);
+
+	high2power = FindNextPowerOf2(array_size);
+	low2power  = FindPrevPowerOf2(g_truncateSize);
+	recursion_lvl = high2power - low2power;
 
 	array_size = 1 << high2power;
-	printf("\n N   = %d \n", array_size);
 	g_truncateSize = 1 << low2power;
-	printf("\n min = %d \n", g_truncateSize);
 
 	size_t mem_req;
-	mem_req = calculate_heap_usage(recursion_lvl, high2power);
-	printf ("\n Glorious heap usage = %lu \n", mem_req);
-	MassiveAlloc(mem_req);
+	mem_req = CalculateHeapSize(recursion_lvl, high2power);
+	AllocateAll(mem_req);
 
     sint32 m, k, n, cacheBlockSize, dataType;
 
@@ -485,7 +553,7 @@ sint32 main(sint32 argc, char *argv[])
 	g_cacheBlockSize = 16;//cacheBlockSize;
 	
 	// Timing start.
-	//start_timing(&usage, &user_start, &system_start);
+	//StartTiming(&usage, &user_start, &system_start);
 		
 	// Get matrices dimension.
 	sint32 size = array_size;
@@ -496,7 +564,6 @@ sint32 main(sint32 argc, char *argv[])
    WTF *matrix_resultA, *matrix_resultB;
 
    matrix_A->size = array_size;
-   //matrix_A->elem = MA;
    for (sint32 i = 0; i < array_size; ++i)
    {
 	   for (sint32 j = 0; j < array_size; ++j)
@@ -523,47 +590,28 @@ sint32 main(sint32 argc, char *argv[])
 
    if ( size <= 2 ) 
    {
-    	handleCornerCase(matrix_A, matrix_B, matrix_C, size); // Corner cases, n = 0 or n = 1
+	   MultiplyMatrixTiny(matrix_A, matrix_B, matrix_C, size); // Corner cases, n = 0 or n = 1
 	} 
    else 
    {
-      //MultiplyMatrix(matrix_A, matrix_B, matrix_C, size);
 	   matrix_resultA = GetSquareMatrix(size/2); // Buffer for addition, subtraction and copy results
 	   matrix_resultB = GetSquareMatrix(size/2); // Buffer for addition, subtraction and copy results
 	   strassenMultiplication(matrix_A, matrix_B, size, matrix_C, matrix_resultA, matrix_resultB);
    }
-    
-    print_mat(matrix_A);
-    printf("\n     x     \n");
-    print_mat(matrix_B);
-    printf("\n     =     \n");
-    print_mat(matrix_C);
-    
-    // // Processing time end.
-	// #ifdef FORCE_SINGLE_CORE
-    	// end_timing(&usage, &user_end, &system_end);
-    	// getTiming_User_System(&process_time, &user_start, &user_end, &system_start, &system_end);
-    // #else
-    	// gettimeofday(&time_end, NULL);
-    	// getTiming(&process_time, &time_start, &time_end);
-    // #endif
-	
-	// // Write processing time.
-	// writeProcessTime(process_time);
-	
-	// // Timing start.
-	// start_timing(&usage, &user_start, &system_start);
-    
-    // writeOutput(matrix_C, size, size);
-    
-    // // Timing end.
-	// end_timing(&usage, &user_end, &system_end);
-	
-	// // Get Time.
-	// getTiming_User_System(&write_time, &user_start, &user_end, &system_start, &system_end);
-	
-	// // Write writing time.
-	// writeWriteTime(write_time);
 
+   StopTiming(&usage, &user_end, &system_end);
+   ComputeTotalTime(&process_time, &user_start, &user_end, &system_start, &system_end);
+
+   printf("\n          Total time spent     = %f \n", process_time);
+    
+//    PrintMatrix(matrix_A);
+//    printf("\n     x     \n");
+//    PrintMatrix(matrix_B);
+//    printf("\n     =     \n");
+//    PrintMatrix(matrix_C);
+    
+
+
+    FreeAll();
     return 0;
 }
