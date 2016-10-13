@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
+#include <sys/resource.h>
+#include <sys/time.h>
 
 typedef int sint32;
 typedef sint32 BBQ;
@@ -77,7 +79,7 @@ void print_2mats(WTF *x, WTF *y)
 
 	      for (j=0;j  < y->size;j++)
 	      {
-	         printf(" %3d",y->elem[(x->size)*(i) + (j)]);
+	         printf(" %3d",y->elem[(y->size)*(i) + (j)]);
 	      }
 	      printf("\n");
 	   }
@@ -98,14 +100,14 @@ void print_mulmats(WTF *x, WTF *y, WTF*z)
 
 	      for (j=0;j  < y->size;j++)
 	      {
-	         printf(" %3d",y->elem[(x->size)*(i) + (j)]);
+	         printf(" %3d",y->elem[(y->size)*(i) + (j)]);
 	      }
 
 	      printf("   =   ");
 
 	      for (j=0;j  < z->size;j++)
 	      {
-	         printf(" %3d",z->elem[(x->size)*(i) + (j)]);
+	         printf(" %3d",z->elem[(z->size)*(i) + (j)]);
 	      }
 	      printf("\n");
 	   }
@@ -198,18 +200,18 @@ void MultiplyMatrix(CONST WTF *A, CONST WTF *B, WTF *C, sint32 size)
 						// Unrolling for k loop
                     	for(aux_k = k; aux_k < unroll_limit; aux_k+=unroll_factor) 
                      {
-                        	acc0 += A->elem [endA+aux_k]   * B->elem [size*(aux_k+ini_i)   + (aux_j)];
-                        	acc1 += A->elem [endA+aux_k+1] * B->elem [size*(aux_k+ini_i+1) + (aux_j)];
-                        	acc2 += A->elem [endA+aux_k+2] * B->elem [size*(aux_k+ini_i+2) + (aux_j)];
-                        	acc3 += A->elem [endA+aux_k+3] * B->elem [size*(aux_k+ini_i+3) + (aux_j)];
-                        	acc4 += A->elem [endA+aux_k+4] * B->elem [size*(aux_k+ini_i+4) + (aux_j)];
+                        	acc0 += A->elem [endA+aux_k]   * B->elem [(B->size)*(aux_k+ini_i)   + (aux_j)];
+                        	acc1 += A->elem [endA+aux_k+1] * B->elem [(B->size)*(aux_k+ini_i+1) + (aux_j)];
+                        	acc2 += A->elem [endA+aux_k+2] * B->elem [(B->size)*(aux_k+ini_i+2) + (aux_j)];
+                        	acc3 += A->elem [endA+aux_k+3] * B->elem [(B->size)*(aux_k+ini_i+3) + (aux_j)];
+                        	acc4 += A->elem [endA+aux_k+4] * B->elem [(B->size)*(aux_k+ini_i+4) + (aux_j)];
                      } 
                         
                         sint32 endC = aux_i*(C->size) + aux_j;
                         
                         // Gather possible uncounted elements
                         for (; aux_k < aux_limit_k; ++aux_k)
-                        	C->elem[endC] += A->elem[endA+aux_k] * B->elem [size*(aux_k+ini_i) + (aux_j)];
+                        	C->elem[endC] += A->elem[endA+aux_k] * B->elem [(B->size)*(aux_k+ini_i) + (aux_j)];
                        
                         // Sum up everything
                         //C(endC) += acc0 + acc1 + acc2 + acc3 + acc4;
@@ -250,7 +252,7 @@ WTF *GetSquareMatrix(sint32 n)
    
    ret->size = n;
    ret->elem = (BBQ*) (ret + 1);
-   memset(ret->elem, 0, n*n*sizeof(ret->elem));
+   memset(ret->elem, 0, n*n*sizeof(BBQ));
 
    return ret;
 }
@@ -274,6 +276,10 @@ void strassenMultiplication(CONST WTF *matrix_A, CONST WTF *matrix_B, sint32 siz
     if (size <= g_truncateSize){ // Small enough to run standard multiplication
     	MultiplyMatrix(matrix_A, matrix_B, matrix_C, size);
     } else {
+    	printf("\n -------------------- THIS IS WHAT I RECEIVED ---------------------\n");
+    	print_2mats(matrix_resultA, matrix_resultB);
+    	printf("\n -------------------- ----------------------- ---------------------\n");
+
         sint32 half_size = size/2;		   // Size for each four quadrant
         sint32 mid_i = half_size; // Index middle of side1
         sint32 mid_j = half_size; // Index middle of side2
@@ -307,15 +313,15 @@ void strassenMultiplication(CONST WTF *matrix_A, CONST WTF *matrix_B, sint32 siz
         	sint32 endM = half_size*i;
  			for (sint32 j = 0; j < half_size; ++j)
  			{ //[n*(i) + (j)]
- 				submatrix_A11->elem[endM + j] = matrix_A->elem[size*(i) + (j)];//printf("A11[%3d][%3d] = A[%3d][%3d] = %3d \n", endM/half_size, j, i,j,submatrix_A11[endM + j]);
- 				submatrix_A12->elem[endM + j] = matrix_A->elem[size*(i) + (j+half_size)];
- 				submatrix_A21->elem[endM + j] = matrix_A->elem[size*(i+half_size) + (j)];
- 				submatrix_A22->elem[endM + j] = matrix_A->elem[size*(i+half_size) + (j+half_size)];
+ 				submatrix_A11->elem[endM + j] = matrix_A->elem[(matrix_A->size)*(i) + (j)];//printf("A11[%3d][%3d] = A[%3d][%3d] = %3d \n", endM/half_size, j, i,j,submatrix_A11[endM + j]);
+ 				submatrix_A12->elem[endM + j] = matrix_A->elem[(matrix_A->size)*(i) + (j+half_size)];
+ 				submatrix_A21->elem[endM + j] = matrix_A->elem[(matrix_A->size)*(i+half_size) + (j)];
+ 				submatrix_A22->elem[endM + j] = matrix_A->elem[(matrix_A->size)*(i+half_size) + (j+half_size)];
 
- 				submatrix_B11->elem[endM + j] = matrix_B->elem[size*(i) + (j)];
- 				submatrix_B12->elem[endM + j] = matrix_B->elem[size*(i) + (j+half_size)];
- 				submatrix_B21->elem[endM + j] = matrix_B->elem[size*(i+half_size) + (j)];
- 				submatrix_B22->elem[endM + j] = matrix_B->elem[size*(i+half_size) + (j+half_size)];
+ 				submatrix_B11->elem[endM + j] = matrix_B->elem[(matrix_B->size)*(i) + (j)];
+ 				submatrix_B12->elem[endM + j] = matrix_B->elem[(matrix_B->size)*(i) + (j+half_size)];
+ 				submatrix_B21->elem[endM + j] = matrix_B->elem[(matrix_B->size)*(i+half_size) + (j)];
+ 				submatrix_B22->elem[endM + j] = matrix_B->elem[(matrix_B->size)*(i+half_size) + (j+half_size)];
  			}
 		}
 
@@ -360,10 +366,13 @@ void strassenMultiplication(CONST WTF *matrix_A, CONST WTF *matrix_B, sint32 siz
 //        print_mat(matrix_resultA);
 //        printf("\n\n **** B11 + B22 = ****\n");
 //        print_mat(matrix_resultB);
+        printf("\n from these two ...\n");
         print_2mats(matrix_resultA, matrix_resultB); WTF *C1 = GetSquareMatrix(matrix_A->size); MultiplyMatrix(matrix_A, matrix_B, C1, matrix_A->size);
+        WTF *CM1 = GetSquareMatrix(matrix_M1->size); MultiplyMatrix(matrix_A, matrix_B, CM1, matrix_M1->size);
         strassenMultiplication(matrix_resultA, matrix_resultB, half_size, matrix_M1, matrix_resultA, matrix_resultB);
 //        printf("\n\n **** M1 = (A11+A22)x(B11+B22) ****\n");
-        print_2mats(matrix_M1,C1);
+        printf("\n this should result: \n");
+        printf("\n M1: \n");print_mat(matrix_M1);printf("\n check CM1: \n");print_mat(CM1);printf("\n check C1: \n");print_mat(C1);
         
         // Copying directly to matrix_C (answer matrix)
         CopyMatrix(matrix_M1, 0, 0, 0, 0, half_size, matrix_C);
@@ -374,9 +383,11 @@ void strassenMultiplication(CONST WTF *matrix_A, CONST WTF *matrix_B, sint32 siz
         // Calculating M2 = (A21 + A22) * (B11)
         AddMatrix(submatrix_A21, submatrix_A22, 0, 0, 0, 0, 0, 0, half_size, matrix_resultA);
         CopyMatrix(submatrix_B11, 0, 0, 0, 0, half_size, matrix_resultB);
+        printf("\n from these two ...\n");
         print_2mats(matrix_resultA, matrix_resultB);MultiplyMatrix(matrix_A, matrix_B, C1, matrix_A->size);
         strassenMultiplication(matrix_resultA, matrix_resultB, half_size, matrix_M1, matrix_resultA, matrix_resultB);
-        print_2mats(matrix_M1,C1);
+        printf("\n this should result: \n");
+        printf("\n M1: \n");print_mat(matrix_M1);printf("\n check C1: \n");print_mat(C1);
         
         CopyMatrix(matrix_M1, 0, 0, mid_i, 0, half_size, matrix_C);
         clear(matrix_M1);
@@ -386,9 +397,11 @@ void strassenMultiplication(CONST WTF *matrix_A, CONST WTF *matrix_B, sint32 siz
         // Calculating M3 = (A11) * (B12 - B22)
         CopyMatrix(submatrix_A11, 0, 0, 0, 0, half_size, matrix_resultA);
         SubMatrix(submatrix_B12, submatrix_B22, 0, 0, 0, 0, 0, 0, half_size, matrix_resultB);
+        printf("\n from these two ...\n");
         print_2mats(matrix_resultA, matrix_resultB);MultiplyMatrix(matrix_A, matrix_B, C1, matrix_A->size);
         strassenMultiplication(matrix_resultA, matrix_resultB, half_size, matrix_M1, matrix_resultA, matrix_resultB);
-        print_2mats(matrix_M1,C1);
+        printf("\n this should result: \n");
+        printf("\n M1: \n");print_mat(matrix_M1);printf("\n check C1: \n");print_mat(C1);
         
         CopyMatrix(matrix_M1, 0, 0, 0, mid_j, half_size, matrix_C);
         clear(matrix_M1);
@@ -398,9 +411,11 @@ void strassenMultiplication(CONST WTF *matrix_A, CONST WTF *matrix_B, sint32 siz
         // Calculating M6 = (A21 - A11) * (B11 + B12)
         SubMatrix(submatrix_A21, submatrix_A11, 0, 0, 0, 0, 0, 0, half_size, matrix_resultA);
         AddMatrix(submatrix_B11, submatrix_B12, 0, 0, 0, 0, 0, 0, half_size, matrix_resultB);
+        printf("\n from these two ...\n");
         print_2mats(matrix_resultA, matrix_resultB);MultiplyMatrix(matrix_A, matrix_B, C1, matrix_A->size);
         strassenMultiplication(matrix_resultA, matrix_resultB, half_size, matrix_M1, matrix_resultA, matrix_resultB);
-        print_mat(matrix_M1);print_2mats(matrix_M1,C1);
+        printf("\n this should result: \n");
+        printf("\n M1: \n");print_mat(matrix_M1);printf("\n check C1: \n");print_mat(C1);
         
         CopyMatrix(matrix_M1, 0, 0, mid_i, mid_j, half_size, matrix_C);
         clear(matrix_M1);
@@ -494,6 +509,12 @@ void strassenMultiplication(CONST WTF *matrix_A, CONST WTF *matrix_B, sint32 siz
 sint32 main(sint32 argc, char *argv[])
 {	
 	sint32 TEST_SIZE = 8;
+
+	struct rlimit hehe;
+	hehe.rlim_cur = 30000000;
+	hehe.rlim_max = 30000000;
+	setrlimit(RLIMIT_DATA, &hehe);
+
 
 	if (argc > 1) TEST_SIZE = atoi(argv[1]);
 	if (argc > 2) g_truncateSize = atoi(argv[2]);

@@ -1,7 +1,7 @@
 
 SRCS1= start.c
 SRCS2= memleak.c
-CFLAGS= -g -O0
+CFLAGS= -g -O0 
 TARGET1= start
 TARGET2= memleak
 
