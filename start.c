@@ -26,6 +26,9 @@ CONST sint32 g_outputWidth = 9; 	   // Set the output width for elements.
 CONST sint32 g_outputPrecision = 15;  // Matrix C elements output precision.
 sint32 g_cacheBlockSize = 16;   	   // Block size for loop tilling/blocking.
 
+void *MemoryCurrent;
+void *MemoryStart;
+
 void print_mat(WTF *x);
 void print_2mats(WTF *x, WTF *y);
 
@@ -80,30 +83,18 @@ size_t calculate_heap_usage(sint32 lvl, sint32 max)
 					(sizeof(WTF) + \
 							sizeof(BBQ) * \
 							((1<<(max-i-1)) * (1<<(max-i-1)))  );
-		printf("\n (%lu) instances * (%lu)[%lu + %lu * %lu * %lu] =  %lu\n", \
-				10 * power7, \
-				(sizeof(WTF) + sizeof(BBQ) * (1<<(max-i-1)) * (1<<(max-i-1))), \
-				sizeof(WTF), \
-				sizeof(BBQ), \
-				(1<<(max-i-1)), \
-				(1<<(max-i-1)), \
-				(10 * power7 * (sizeof(WTF) + sizeof(BBQ) * (1<<(max-i-1)) * (1<<(max-i-1)))) );
 	}
 
-	printf("\n heap req = %lu \n", heap_req);
-	printf("\n + %lu \n", 2* (sizeof(WTF)+ sizeof(BBQ) * ((1<<(max-1)) * (1<<(max-1))) ));
+
 	heap_req += 2 * \
 			(sizeof(WTF) + \
 					sizeof(BBQ) * \
 					((1<<(max-1)) * (1<<(max-1)))  );
 
-	printf("\n + %lu \n", 3* (sizeof(WTF)+ sizeof(BBQ) * ((1<<(max)) * (1<<(max))) ));
 	heap_req += 3 * \
 			(sizeof(WTF) + \
 					sizeof(BBQ) * \
 					((1<<(max)) * (1<<(max)))  );
-
-	printf("\n heap req = %lu \n", heap_req);
 	return heap_req;
 }
 
@@ -287,13 +278,26 @@ void handleCornerCase(CONST WTF *matrix_A, CONST WTF *matrix_B, WTF *matrix_C, s
 	}
 }
 
+void MassiveAlloc (size_t size)
+{
+	MemoryStart = (void *) malloc(size);
+	MemoryCurrent = MemoryStart;
+	return;
+}
+
+void MassiveFree (void)
+{
+	free(MemoryStart);
+}
 
 WTF *GetSquareMatrix(sint32 n)
 {
    WTF *ret;
    sint32 i;
    
-   ret = (WTF *) malloc(n*n*sizeof(BBQ) + sizeof(WTF));
+   //ret = (WTF *) malloc(n*n*sizeof(BBQ) + sizeof(WTF));
+   ret = (WTF *) MemoryCurrent;
+   MemoryCurrent += n*n*sizeof(BBQ) + sizeof(WTF);
    
    ret->size = n;
    ret->elem = (BBQ*) (ret + 1);
@@ -454,12 +458,6 @@ sint32 main(sint32 argc, char *argv[])
 
 	sint32 high2power, low2power, recursion_lvl;
 
-//	struct rlimit hehe;
-//	hehe.rlim_cur = 30000000;
-//	hehe.rlim_max = 30000000;
-//	setrlimit(RLIMIT_DATA, &hehe);
-
-
 	if (argc > 1) array_size = atoi(argv[1]);
 	if (argc > 2) g_truncateSize = atoi(argv[2]);
 
@@ -472,9 +470,10 @@ sint32 main(sint32 argc, char *argv[])
 	g_truncateSize = 1 << low2power;
 	printf("\n min = %d \n", g_truncateSize);
 
-	unsigned long mem_req;
+	size_t mem_req;
 	mem_req = calculate_heap_usage(recursion_lvl, high2power);
 	printf ("\n Glorious heap usage = %lu \n", mem_req);
+	MassiveAlloc(mem_req);
 
     sint32 m, k, n, cacheBlockSize, dataType;
 
@@ -534,11 +533,11 @@ sint32 main(sint32 argc, char *argv[])
 	   strassenMultiplication(matrix_A, matrix_B, size, matrix_C, matrix_resultA, matrix_resultB);
    }
     
-//    print_mat(matrix_A);
-//    printf("\n     x     \n");
-//    print_mat(matrix_B);
-//    printf("\n     =     \n");
-//    print_mat(matrix_C);
+    print_mat(matrix_A);
+    printf("\n     x     \n");
+    print_mat(matrix_B);
+    printf("\n     =     \n");
+    print_mat(matrix_C);
     
     // // Processing time end.
 	// #ifdef FORCE_SINGLE_CORE
